@@ -5,7 +5,7 @@ import plotly.express as px
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -41,6 +41,38 @@ def run_query(query):
 
 
 # ============================================================
+# CUSTOM CSS
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    .main-title {
+        font-size: 42px;
+        font-weight: 700;
+        margin-bottom: 0px;
+    }
+
+    .subtitle {
+        font-size: 18px;
+        color: #777;
+        margin-bottom: 25px;
+    }
+
+    .section-title {
+        font-size: 24px;
+        font-weight: 600;
+        margin-top: 20px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
 # SIDEBAR
 # ============================================================
 
@@ -67,6 +99,16 @@ page = st.sidebar.radio(
     ]
 )
 
+st.sidebar.divider()
+
+st.sidebar.caption(
+    "Built by Barkha Bale"
+)
+
+st.sidebar.caption(
+    "SQL • DuckDB • Python • Streamlit"
+)
+
 
 # ============================================================
 # EXECUTIVE OVERVIEW
@@ -74,26 +116,72 @@ page = st.sidebar.radio(
 
 if page == "Executive Overview":
 
-    st.title("🛒 E-Commerce Intelligence Hub")
-
-    st.subheader("Executive Overview")
+    st.markdown(
+        '<div class="main-title">🛒 E-Commerce Intelligence Hub</div>',
+        unsafe_allow_html=True
+    )
 
     st.markdown(
+        '<div class="subtitle">Business Intelligence & Customer Analytics</div>',
+        unsafe_allow_html=True
+    )
+
+
+    # --------------------------------------------------------
+    # GLOBAL DATE RANGE
+    # --------------------------------------------------------
+
+    dates = run_query(
         """
-        A business-focused analytics dashboard built with
-        **SQL, DuckDB, Python and Streamlit**.
+        SELECT
+
+            MIN(
+                CAST(
+                    order_purchase_timestamp
+                    AS TIMESTAMP
+                )
+            ) AS min_date,
+
+            MAX(
+                CAST(
+                    order_purchase_timestamp
+                    AS TIMESTAMP
+                )
+            ) AS max_date
+
+        FROM orders
         """
     )
 
+    min_date = dates.iloc[0]["min_date"].date()
+    max_date = dates.iloc[0]["max_date"].date()
+
+
+    selected_dates = st.sidebar.date_input(
+        "📅 Order Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+
+
+    if len(selected_dates) == 2:
+
+        start_date = selected_dates[0]
+        end_date = selected_dates[1]
+
+    else:
+
+        start_date = min_date
+        end_date = max_date
+
+
     # --------------------------------------------------------
     # KPI QUERY
-    # IMPORTANT:
-    # customer_unique_id = actual customer
-    # customer_id = order-specific customer record
     # --------------------------------------------------------
 
     kpis = run_query(
-        """
+        f"""
         SELECT
 
             SUM(p.payment_value) AS revenue,
@@ -113,41 +201,68 @@ if page == "Executive Overview":
 
         JOIN customers c
             ON o.customer_id = c.customer_id
+
+        WHERE
+
+            CAST(
+                o.order_purchase_timestamp
+                AS DATE
+            )
+
+            BETWEEN
+                '{start_date}'
+                AND
+                '{end_date}'
         """
     )
 
-    revenue = float(kpis.iloc[0]["revenue"])
-    orders = int(kpis.iloc[0]["orders"])
-    customers = int(kpis.iloc[0]["customers"])
 
-    aov = revenue / orders if orders else 0
+    revenue = float(
+        kpis.iloc[0]["revenue"] or 0
+    )
+
+    orders = int(
+        kpis.iloc[0]["orders"] or 0
+    )
+
+    customers = int(
+        kpis.iloc[0]["customers"] or 0
+    )
+
+    aov = (
+        revenue / orders
+        if orders > 0
+        else 0
+    )
 
 
     # --------------------------------------------------------
     # KPI CARDS
     # --------------------------------------------------------
 
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    col1.metric(
-        "💰 Total Revenue",
+
+    c1.metric(
+        "💰 Revenue",
         f"€{revenue:,.0f}"
     )
 
-    col2.metric(
+    c2.metric(
         "🛍️ Orders",
         f"{orders:,}"
     )
 
-    col3.metric(
+    c3.metric(
         "👥 Customers",
         f"{customers:,}"
     )
 
-    col4.metric(
+    c4.metric(
         "🧾 Average Order Value",
         f"€{aov:,.2f}"
     )
+
 
     st.divider()
 
@@ -157,15 +272,17 @@ if page == "Executive Overview":
     # --------------------------------------------------------
 
     monthly = run_query(
-        """
+        f"""
         SELECT
 
             DATE_TRUNC(
                 'month',
+
                 CAST(
                     o.order_purchase_timestamp
                     AS TIMESTAMP
                 )
+
             ) AS month,
 
             SUM(
@@ -175,13 +292,28 @@ if page == "Executive Overview":
         FROM orders o
 
         JOIN order_payments p
-            ON o.order_id = p.order_id
+
+            ON o.order_id =
+               p.order_id
+
+        WHERE
+
+            CAST(
+                o.order_purchase_timestamp
+                AS DATE
+            )
+
+            BETWEEN
+                '{start_date}'
+                AND
+                '{end_date}'
 
         GROUP BY 1
 
         ORDER BY 1
         """
     )
+
 
     fig_revenue = px.line(
         monthly,
@@ -191,11 +323,13 @@ if page == "Executive Overview":
         title="Monthly Revenue"
     )
 
+
     fig_revenue.update_layout(
-        xaxis_title="Month",
+        xaxis_title="",
         yaxis_title="Revenue",
         hovermode="x unified"
     )
+
 
     st.plotly_chart(
         fig_revenue,
@@ -204,11 +338,11 @@ if page == "Executive Overview":
 
 
     # --------------------------------------------------------
-    # TOP PRODUCT CATEGORIES
+    # REVENUE BY CATEGORY
     # --------------------------------------------------------
 
     category = run_query(
-        """
+        f"""
         SELECT
 
             COALESCE(
@@ -223,12 +357,32 @@ if page == "Executive Overview":
 
         FROM order_items oi
 
+        JOIN orders o
+
+            ON oi.order_id =
+               o.order_id
+
         JOIN products p
-            ON oi.product_id = p.product_id
+
+            ON oi.product_id =
+               p.product_id
 
         LEFT JOIN product_category_translation t
+
             ON p.product_category_name =
                t.product_category_name
+
+        WHERE
+
+            CAST(
+                o.order_purchase_timestamp
+                AS DATE
+            )
+
+            BETWEEN
+                '{start_date}'
+                AND
+                '{end_date}'
 
         GROUP BY 1
 
@@ -238,6 +392,7 @@ if page == "Executive Overview":
         """
     )
 
+
     fig_category = px.bar(
         category.sort_values("revenue"),
         x="revenue",
@@ -246,10 +401,12 @@ if page == "Executive Overview":
         title="Top 10 Product Categories by Revenue"
     )
 
+
     fig_category.update_layout(
         xaxis_title="Revenue",
-        yaxis_title="Category"
+        yaxis_title=""
     )
+
 
     st.plotly_chart(
         fig_category,
@@ -267,15 +424,11 @@ elif page == "Customer Intelligence":
 
     st.markdown(
         """
-        Customer-level analysis covering purchasing behaviour,
-        repeat purchases and RFM segmentation.
+        Understand customer purchasing behaviour,
+        repeat purchasing and customer value.
         """
     )
 
-
-    # --------------------------------------------------------
-    # CUSTOMER KPIs
-    # --------------------------------------------------------
 
     customer_kpis = run_query(
         """
@@ -292,11 +445,14 @@ elif page == "Customer Intelligence":
             FROM orders o
 
             JOIN customers c
-                ON o.customer_id = c.customer_id
+
+                ON o.customer_id =
+                   c.customer_id
 
             GROUP BY
                 c.customer_unique_id
         )
+
 
         SELECT
 
@@ -306,7 +462,8 @@ elif page == "Customer Intelligence":
 
             SUM(
                 CASE
-                    WHEN orders > 1 THEN 1
+                    WHEN orders > 1
+                    THEN 1
                     ELSE 0
                 END
             ) AS repeat_customers
@@ -314,6 +471,7 @@ elif page == "Customer Intelligence":
         FROM customer_orders
         """
     )
+
 
     total_customers = int(
         customer_kpis.iloc[0]["customers"]
@@ -327,18 +485,20 @@ elif page == "Customer Intelligence":
         customer_kpis.iloc[0]["repeat_customers"]
     )
 
+
     repeat_rate = (
-        repeat_customers / total_customers * 100
+        repeat_customers
+        /
+        total_customers
+        *
+        100
         if total_customers > 0
         else 0
     )
 
 
-    # --------------------------------------------------------
-    # CUSTOMER KPI CARDS
-    # --------------------------------------------------------
-
     c1, c2, c3 = st.columns(3)
+
 
     c1.metric(
         "👥 Unique Customers",
@@ -346,7 +506,7 @@ elif page == "Customer Intelligence":
     )
 
     c2.metric(
-        "🛍️ Average Orders / Customer",
+        "🛍️ Avg Orders / Customer",
         f"{avg_orders:.2f}"
     )
 
@@ -355,11 +515,12 @@ elif page == "Customer Intelligence":
         f"{repeat_rate:.1f}%"
     )
 
+
     st.divider()
 
 
     # --------------------------------------------------------
-    # RFM SEGMENTATION
+    # RFM
     # --------------------------------------------------------
 
     rfm = run_query(
@@ -384,6 +545,7 @@ elif page == "Customer Intelligence":
             SELECT
 
                 c.customer_unique_id,
+
 
                 DATE_DIFF(
                     'day',
@@ -413,11 +575,15 @@ elif page == "Customer Intelligence":
 
 
             JOIN customers c
-                ON o.customer_id = c.customer_id
+
+                ON o.customer_id =
+                   c.customer_id
 
 
             JOIN order_payments p
-                ON o.order_id = p.order_id
+
+                ON o.order_id =
+                   p.order_id
 
 
             CROSS JOIN analysis_date a
@@ -461,6 +627,7 @@ elif page == "Customer Intelligence":
             CASE
 
                 WHEN
+
                     recency_score
                     +
                     frequency_score
@@ -471,6 +638,7 @@ elif page == "Customer Intelligence":
 
 
                 WHEN
+
                     recency_score
                     +
                     frequency_score
@@ -481,6 +649,7 @@ elif page == "Customer Intelligence":
 
 
                 WHEN
+
                     recency_score
                     +
                     frequency_score
@@ -491,6 +660,7 @@ elif page == "Customer Intelligence":
 
 
                 WHEN
+
                     recency_score
                     +
                     frequency_score
@@ -500,7 +670,8 @@ elif page == "Customer Intelligence":
                     THEN 'At Risk'
 
 
-                ELSE 'Hibernating / Lost'
+                ELSE
+                    'Hibernating / Lost'
 
             END AS customer_segment,
 
@@ -524,32 +695,23 @@ elif page == "Customer Intelligence":
     )
 
 
-    # --------------------------------------------------------
-    # RFM CHART
-    # --------------------------------------------------------
+    left, right = st.columns(2)
 
-    fig_rfm = px.bar(
-        rfm.sort_values("customers"),
-        x="customers",
-        y="customer_segment",
-        orientation="h",
-        title="Customer Segments"
+
+    fig_rfm = px.pie(
+        rfm,
+        names="customer_segment",
+        values="customers",
+        hole=0.45,
+        title="Customer Segmentation"
     )
 
-    fig_rfm.update_layout(
-        xaxis_title="Number of Customers",
-        yaxis_title="Segment"
-    )
 
-    st.plotly_chart(
+    left.plotly_chart(
         fig_rfm,
         use_container_width=True
     )
 
-
-    # --------------------------------------------------------
-    # RFM REVENUE
-    # --------------------------------------------------------
 
     fig_rfm_revenue = px.bar(
         rfm.sort_values("revenue"),
@@ -559,18 +721,15 @@ elif page == "Customer Intelligence":
         title="Revenue by Customer Segment"
     )
 
-    fig_rfm_revenue.update_layout(
-        xaxis_title="Revenue",
-        yaxis_title="Segment"
-    )
 
-    st.plotly_chart(
+    right.plotly_chart(
         fig_rfm_revenue,
         use_container_width=True
     )
 
 
     st.subheader("Customer Segment Details")
+
 
     st.dataframe(
         rfm,
@@ -589,8 +748,8 @@ elif page == "Product Intelligence":
 
     st.markdown(
         """
-        Product and category performance analysis covering
-        orders, units sold and revenue.
+        Identify the categories and products contributing
+        most to revenue and sales volume.
         """
     )
 
@@ -616,17 +775,25 @@ elif page == "Product Intelligence":
 
             SUM(
                 oi.price
-            ) AS revenue
+            ) AS revenue,
+
+
+            AVG(
+                oi.price
+            ) AS average_price
 
 
         FROM order_items oi
 
 
         JOIN products p
-            ON oi.product_id = p.product_id
+
+            ON oi.product_id =
+               p.product_id
 
 
         LEFT JOIN product_category_translation t
+
             ON p.product_category_name =
                t.product_category_name
 
@@ -639,67 +806,50 @@ elif page == "Product Intelligence":
     )
 
 
-    # --------------------------------------------------------
-    # TOP 15 CATEGORIES
-    # --------------------------------------------------------
-
-    top_products = products.head(15).sort_values(
-        "revenue"
+    top_products = (
+        products
+        .head(15)
+        .sort_values("revenue")
     )
 
 
-    fig_products = px.bar(
+    left, right = st.columns(2)
+
+
+    fig_revenue = px.bar(
         top_products,
         x="revenue",
         y="category",
         orientation="h",
-        title="Top 15 Product Categories by Revenue"
+        title="Top Categories by Revenue"
     )
 
-    fig_products.update_layout(
-        xaxis_title="Revenue",
-        yaxis_title="Category"
-    )
 
-    st.plotly_chart(
-        fig_products,
+    left.plotly_chart(
+        fig_revenue,
         use_container_width=True
     )
 
 
-    # --------------------------------------------------------
-    # UNITS SOLD
-    # --------------------------------------------------------
-
-    top_units = products.head(15).sort_values(
-        "units_sold"
-    )
-
-
     fig_units = px.bar(
-        top_units,
+        top_products.sort_values(
+            "units_sold"
+        ),
         x="units_sold",
         y="category",
         orientation="h",
-        title="Top Product Categories by Units Sold"
+        title="Top Categories by Units Sold"
     )
 
-    fig_units.update_layout(
-        xaxis_title="Units Sold",
-        yaxis_title="Category"
-    )
 
-    st.plotly_chart(
+    right.plotly_chart(
         fig_units,
         use_container_width=True
     )
 
 
-    # --------------------------------------------------------
-    # TABLE
-    # --------------------------------------------------------
-
     st.subheader("Category Performance")
+
 
     st.dataframe(
         products,
@@ -732,6 +882,7 @@ elif page == "Retention":
 
                 c.customer_unique_id,
 
+
                 DATE_TRUNC(
                     'month',
 
@@ -741,12 +892,18 @@ elif page == "Retention":
                             AS TIMESTAMP
                         )
                     )
+
                 ) AS cohort_month
+
 
             FROM orders o
 
+
             JOIN customers c
-                ON o.customer_id = c.customer_id
+
+                ON o.customer_id =
+                   c.customer_id
+
 
             GROUP BY
                 c.customer_unique_id
@@ -759,6 +916,7 @@ elif page == "Retention":
 
                 c.customer_unique_id,
 
+
                 DATE_TRUNC(
                     'month',
 
@@ -766,12 +924,17 @@ elif page == "Retention":
                         o.order_purchase_timestamp
                         AS TIMESTAMP
                     )
+
                 ) AS purchase_month
+
 
             FROM orders o
 
+
             JOIN customers c
-                ON o.customer_id = c.customer_id
+
+                ON o.customer_id =
+                   c.customer_id
         ),
 
 
@@ -840,13 +1003,16 @@ elif page == "Retention":
 
 
                 MAX(
+
                     CASE
 
-                        WHEN months_since_first_purchase = 0
+                        WHEN
+                            months_since_first_purchase = 0
 
                         THEN active_customers
 
                     END
+
                 ) AS cohort_size
 
 
@@ -866,7 +1032,8 @@ elif page == "Retention":
 
             ROUND(
 
-                100.0 *
+                100.0
+                *
                 c.active_customers
                 /
                 NULLIF(
@@ -897,10 +1064,6 @@ elif page == "Retention":
     )
 
 
-    # --------------------------------------------------------
-    # RETENTION PIVOT
-    # --------------------------------------------------------
-
     pivot = retention.pivot(
         index="cohort_month",
         columns="months_since_first_purchase",
@@ -914,14 +1077,10 @@ elif page == "Retention":
 
 
     pivot.columns = [
-        f"Month {int(column)}"
-        for column in pivot.columns
+        f"Month {int(c)}"
+        for c in pivot.columns
     ]
 
-
-    # --------------------------------------------------------
-    # HEATMAP
-    # --------------------------------------------------------
 
     fig_retention = px.imshow(
         pivot,
@@ -960,7 +1119,8 @@ elif page == "Operations":
 
     st.markdown(
         """
-        Delivery performance and customer satisfaction analysis.
+        Explore the relationship between delivery performance
+        and customer satisfaction.
         """
     )
 
@@ -1051,11 +1211,7 @@ elif page == "Operations":
     )
 
 
-    # --------------------------------------------------------
-    # DELIVERY CHART
-    # --------------------------------------------------------
-
-    c1, c2 = st.columns(2)
+    left, right = st.columns(2)
 
 
     fig_delivery = px.bar(
@@ -1066,21 +1222,11 @@ elif page == "Operations":
     )
 
 
-    fig_delivery.update_layout(
-        xaxis_title="Delivery Status",
-        yaxis_title="Orders"
-    )
-
-
-    c1.plotly_chart(
+    left.plotly_chart(
         fig_delivery,
         use_container_width=True
     )
 
-
-    # --------------------------------------------------------
-    # REVIEW CHART
-    # --------------------------------------------------------
 
     fig_reviews = px.bar(
         delivery,
@@ -1090,21 +1236,11 @@ elif page == "Operations":
     )
 
 
-    fig_reviews.update_layout(
-        xaxis_title="Delivery Status",
-        yaxis_title="Average Review Score"
-    )
-
-
-    c2.plotly_chart(
+    right.plotly_chart(
         fig_reviews,
         use_container_width=True
     )
 
-
-    # --------------------------------------------------------
-    # OPERATIONS TABLE
-    # --------------------------------------------------------
 
     st.subheader("Delivery Performance")
 
@@ -1123,6 +1259,13 @@ elif page == "Operations":
 st.sidebar.divider()
 
 st.sidebar.caption(
-    "Built by Barkha Bale | "
+    "E-Commerce Intelligence Hub"
+)
+
+st.sidebar.caption(
     "SQL • DuckDB • Python • Streamlit"
+)
+
+st.sidebar.caption(
+    "Built by Barkha Bale"
 )
