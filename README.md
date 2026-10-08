@@ -103,3 +103,82 @@ ecommerce-intelligence-hub/
 ├── .gitignore
 ├── README.md
 └── requirements.txt
+
+
+## 📊 Dashboard
+
+The project includes an interactive Streamlit dashboard covering:
+
+- Executive revenue KPIs
+- Monthly revenue trends
+- Customer segmentation
+- Repeat customer analysis
+- Product category performance
+- Customer retention cohorts
+- Delivery performance
+- Customer satisfaction
+
+### Dashboard Preview
+
+![Executive Overview](dashboard/screenshots/executive_overview.png)
+
+### Customer Intelligence
+
+![Customer Intelligence](dashboard/screenshots/customer_intelligence.png)
+
+### Product Intelligence
+
+![Product Intelligence](dashboard/screenshots/product_intelligence.png)
+
+### Retention Analysis
+
+![Retention](dashboard/screenshots/retention.png)
+
+### Operations
+
+![Operations](dashboard/screenshots/operations.png)
+
+## 🛠️ Technical Skills Demonstrated
+
+### SQL
+- Complex JOINs
+- CTEs
+- Aggregations
+- CASE statements
+- Window functions
+- RANK / NTILE
+- Date and time analysis
+- Cohort analysis
+- RFM segmentation
+- Data-quality checks
+
+### Python
+- Pandas
+- DuckDB
+- Data processing
+- Analytical pipelines
+
+### Visualization
+- Streamlit
+- Plotly
+- Interactive dashboards
+
+### Analytics
+- Customer segmentation
+- Revenue analysis
+- Product analytics
+- Retention analysis
+- Operational analytics
+- Customer satisfaction analysis
+
+## 💡 Business Questions Answered
+
+The analysis investigates:
+
+1. How does revenue change over time?
+2. Which product categories generate the most revenue?
+3. How many customers make repeat purchases?
+4. Which customer segments generate the greatest value?
+5. How does customer retention change after the first purchase?
+6. How does delivery performance relate to customer satisfaction?
+7. Which categories contribute most to overall sales?
